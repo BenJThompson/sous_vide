@@ -30,7 +30,7 @@ void main(void) {
     config_adc();
     config_io();
     //config_uart();
-    config_timer(); // TODO
+    config_timer();
     config_int(); // TODO
     init_io();
     
@@ -39,7 +39,6 @@ void main(void) {
 
 void interrupt low_priority low_isr(void) {
     tick += 1;
-    reset_timer();
     INTCONbits.TMR0IF = 0;
 }
 
@@ -52,6 +51,58 @@ void interrupt high_priority isr() {
     
     // TODO Add interrupt for turning off the triac trigger
     
+}
+
+void config_int() {
+    
+    //Timer 0
+    INTCONbits.TMR0IE = 1; // 1 = Enables the TMR0 overflow interrupt
+    INTCON2bits.TMR0IP = 0; // 0 = Low priority
+    //Timer 1
+    PIE1bits.TMR1IE = 1;
+    PIR1bits.TMR1IF = 0; 
+    //Timer 3
+    PIR2bits.TMR3IF = 0; 
+    //ADC 
+    PIR1bits.ADIF = 0; ? // Might belong somewhere else
+    
+    INTCONbits.GIEH = 1; // 1 = Enables all high-priority interrupts
+    INTCONbits.GIEL = 1; // 1 = Enables all low-priority peripheral interrupts (if GIE/GIEH = 1)
+}
+
+void config_timer() {
+    // Tick timer 
+    // f = ((1Mhz / 4) / 250) = 1e3
+    TMR0L = 0xFF - 250 - 2;
+    INTCONbits.TMR0IF = 0; // 0 = TMR0 register did not overflow
+    // T0CON<7> 1 = starts Timer0
+    // T0CON<6> 1 = Timer0 is configured as a 8-bit timer/counter
+    // T0CON<5> 0 = Internal instruction cycle clock (CLKO)
+    // T0CON<4> N/A
+    // T0CON<3> 1 = Timer0 prescaler is not assigned.
+    // T0CON<2:0>  N/A
+    T0CON = 0b11001000;
+    
+    // Process timer
+    // (1e-6s*4) * 65535 = 0.26s; typical mains period = 0.02s to 0.016s
+    // T1CON<7> 1 = Enables register read/write of Timer1 in one 16-bit operation
+    // T1CON<6> 0 = Device clock is derived from another source
+    // T1CON<5:4> 00 = 1:1 Prescale value
+    // T1CON<3> 0 = Timer1 oscillator is shut off
+    // T1CON<2> This bit is ignored.
+    // T1CON<1> 0 = Internal clock (F OSC /4)
+    // T1CON<0> 0 = disables Timer1
+    T1CON = 0b10000000;
+    
+    // Mains Period Timer
+    // T3CON<7> 1 = Enables register read/write of Timer3 in one 16-bit operation
+    // T3CON<6> 1 = Timer3 is the capture/compare clock source for both CCP modules
+    // T3CON<5:4> 00 = 1:1 Prescale value
+    // T3CON<3> This bit is ignored.
+    // T3CON<2> This bit is ignored.
+    // T3CON<1> 0 = Internal clock (F OSC /4)
+    // T3CON<0> 0 = Stops Timer3
+    T3CON = 0b11000000;
 }
 
 void config_osc(void) {
