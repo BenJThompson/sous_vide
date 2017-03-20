@@ -22,7 +22,14 @@
 
 
 #include <xc.h>
+#include <stdbool.h>
 #include "main.h"
+
+volatile int tick = 0;
+volatile phase_state_type phase_state = IDLE;
+volatile double voltage_adc_value;
+volatile bool voltage_adc_updated;
+volatile double temp_adc_value;
 
 void main(void) {
     
@@ -31,8 +38,10 @@ void main(void) {
     config_io();
     //config_uart();
     config_timer();
-    config_int(); // TODO
+    config_int();
     init_io();
+    init_env_var();
+    
     
     return;
 }
@@ -42,36 +51,57 @@ void interrupt low_priority low_isr(void) {
     INTCONbits.TMR0IF = 0;
 }
 
-void interrupt high_priority isr() {    
-    // TODO Add ADC interrupt
+void interrupt high_priority isr(void) {    
     // Trigger the temperature ADC after the peak of the of phase has been found
     //      and there is some time before we need to check it again.
     //      Make an averaged temperature
     //      Ensure that the temperature variable is volatile
     
     // TODO Add interrupt for turning off the triac trigger
-    
+    if (PIR1bits.TMR1IF){
+        update_phase_state();
+        PIR1bits.TMR1IF = 0;
+    }
+    if(PIR1bits.ADIF){
+        update_adc_value();
+        PIR1bits.ADIF = 0;
+    }
+}
+
+void update_phase_state(void){
+    // TODO
+}
+
+void update_adc_value(void){
+    if (ADCON0bits.CHS0 == VOLTAGE_ADC_CHANNEL){
+        voltage_adc_value = (double)(ADRESH << 8 + ADRESL) / 0x400;
+        voltage_adc_updated = true;
+    } else {
+        // TODO temp_adc_value = ?
+    }
 }
 
 void config_int() {
     
-    //Timer 0
-    INTCONbits.TMR0IE = 1; // 1 = Enables the TMR0 overflow interrupt
-    INTCON2bits.TMR0IP = 0; // 0 = Low priority
-    //Timer 1
-    PIE1bits.TMR1IE = 1;
+    /* Timer 0 - Tick timer */
+    INTCON2bits.TMR0IP = 0; // 0 = low priority
+    INTCONbits.TMR0IF = 0;
+    INTCONbits.TMR0IE = 1;
+    /* Timer 1 - Process timer */
+    IPR1bits.TMR1IP = 1; // 1 = high priority
     PIR1bits.TMR1IF = 0; 
-    //Timer 3
-    PIR2bits.TMR3IF = 0; 
-    //ADC 
-    PIR1bits.ADIF = 0; ? // Might belong somewhere else
-    
+    PIE1bits.TMR1IE = 1;
+    /* ADC */ 
+    IPR1bits.ADIP = 1; 
+    PIR1bits.ADIF = 0;
+    PIE1bits.ADIE = 1;    
+            
     INTCONbits.GIEH = 1; // 1 = Enables all high-priority interrupts
     INTCONbits.GIEL = 1; // 1 = Enables all low-priority peripheral interrupts (if GIE/GIEH = 1)
 }
 
 void config_timer() {
-    // Tick timer 
+    /* Tick timer */
     // f = ((1Mhz / 4) / 250) = 1e3
     TMR0L = 0xFF - 250 - 2;
     INTCONbits.TMR0IF = 0; // 0 = TMR0 register did not overflow
@@ -83,7 +113,7 @@ void config_timer() {
     // T0CON<2:0>  N/A
     T0CON = 0b11001000;
     
-    // Process timer
+    /* Process timer */
     // (1e-6s*4) * 65535 = 0.26s; typical mains period = 0.02s to 0.016s
     // T1CON<7> 1 = Enables register read/write of Timer1 in one 16-bit operation
     // T1CON<6> 0 = Device clock is derived from another source
@@ -94,7 +124,7 @@ void config_timer() {
     // T1CON<0> 0 = disables Timer1
     T1CON = 0b10000000;
     
-    // Mains Period Timer
+    /* Mains Period Timer */
     // T3CON<7> 1 = Enables register read/write of Timer3 in one 16-bit operation
     // T3CON<6> 1 = Timer3 is the capture/compare clock source for both CCP modules
     // T3CON<5:4> 00 = 1:1 Prescale value
@@ -196,12 +226,16 @@ void init_io(void) {
     // PORT E
 }
 
+void init_env_var(void){
+    
+}
+
 void config_adc(void){
     
     // ADCON0<7:6> Unimplemented
     // ADCON0<5:2> 0000 = Channel 0 (AN0)
     // ADCON0<1> When ADON = 1, 0 = A/D Idle
-    // ADCON0<0> 1 = A/D converter module is disabled
+    // ADCON0<0> 1 = A/D converter module is enabled
     ADCON0 = 0b00000001;
     
     // ADCON0<7:6> Unimplemented
@@ -215,4 +249,37 @@ void config_adc(void){
     // ADCON0<5:3> 001 = 2 T_AD --> 2 * 2us = 4us (min = 1.1us)
     // ADCON0<2:0> 000 = F OSC/2 --> T_AD = (1/(1 Mhz/2)) = 2us
     ADCON2 = 0b10001000;
+}
+
+
+
+float get_mains_info(void){
+    double voltage_sum = 0.0;
+    double voltage_max = 0.0;
+    int voltage_sample_count = 0;
+    double period_sum = 0;
+    int period_count = 0;
+    while(voltage_sample_count < 1000){
+        if (start_adc(VOLTAGE_ADC_CHANNEL)){
+            while(voltage_adc_updated == false){}
+            voltage_sum += voltage_adc_value;
+            if (voltage_adc_value > voltage_max){
+                voltage_max = voltage_adc_value;
+            }
+        }
+        for (int i=0; i<1000; i++){}
+        
+    
+        
+    }
+}
+
+bool start_adc(int channel){
+    bool success = false;
+    if (0 == ADCON0bits.GO_DONE){
+        ADCON0bits.CHS0 = channel;
+        ADCON0bits.GO_DONE = 1;
+        success = true;
+    }
+    return success;
 }

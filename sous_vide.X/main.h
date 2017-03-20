@@ -85,6 +85,13 @@
 #define    TRIS_OUTPUT 0
 #define    TRIS_INPUT 1
 
+#define     VOLTAGE_ADC_CHANNEL = 0
+#define     TEMP_ADC_CHANNEL = 1
+
+// Enums
+
+typedef enum {IDLE, OFF, TURN_ON, ON} phase_state_type;
+
 
 // PORT A
 //#define  PORTAbits.RA0
