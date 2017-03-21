@@ -299,8 +299,8 @@ void get_mains_info(double *mains_max_v, double *mains_period){
             voltage_adc_updated = false;
         }
         mains_average = voltage_sum / voltage; 
-        
-    }
+         
+   }
 }
 
 double get_voltage_adc_blocking(void){
