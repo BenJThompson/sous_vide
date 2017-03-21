@@ -9,7 +9,8 @@
  * TODO
  * 
  * - WDT
- * - State Machine
+ * - Phase State Machine
+ * - UI State Machine
  * - Display Update
  * - Temperature Update
  * - Phase Interrupt - Determine TAD times and checking frequency
@@ -25,13 +26,15 @@
 #include <stdbool.h>
 #include "main.h"
 
-volatile int tick = 0;
+volatile unsigned int tick = 0;
 volatile phase_state_type phase_state = IDLE;
 volatile double voltage_adc_value;
 volatile bool voltage_adc_updated;
 volatile double temp_adc_value;
 
 void main(void) {
+    double mains_max_v;
+    double mains_period;
     
     config_osc();
     config_adc();
@@ -40,10 +43,9 @@ void main(void) {
     config_timer();
     config_int();
     init_io();
-    init_env_var();
+
+    get_mains_info(&mains_max_v, &mains_period);
     
-    
-    return;
 }
 
 void interrupt low_priority low_isr(void) {
@@ -102,7 +104,7 @@ void config_int() {
 
 void config_timer() {
     /* Tick timer */
-    // f = ((1Mhz / 4) / 250) = 1e3
+    // f = ((1Mhz / 4) / 250) = 1 kHz
     TMR0L = 0xFF - 250 - 2;
     INTCONbits.TMR0IF = 0; // 0 = TMR0 register did not overflow
     // T0CON<7> 1 = starts Timer0
@@ -226,10 +228,6 @@ void init_io(void) {
     // PORT E
 }
 
-void init_env_var(void){
-    
-}
-
 void config_adc(void){
     
     // ADCON0<7:6> Unimplemented
@@ -251,27 +249,68 @@ void config_adc(void){
     ADCON2 = 0b10001000;
 }
 
-
-
-float get_mains_info(void){
+void get_mains_info(double *mains_max_v, double *mains_period){
     double voltage_sum = 0.0;
     double voltage_max = 0.0;
-    int voltage_sample_count = 0;
-    double period_sum = 0;
-    int period_count = 0;
-    while(voltage_sample_count < 1000){
+    double voltage_max_approx = 0.0;
+    double inst_voltage;
+    unsigned long voltage_sample_count = 0;
+    unsigned int halfperiod_count = 0;
+    unsigned int halfperiod_state = 0;
+    
+    // Find approx peak value (approx due to noise)
+    // @4us/sample will sample a min of 5 periods, actual will be more
+    while(voltage_sample_count < 400000){ 
+        inst_voltage = get_voltage_adc_blocking();
+        if (inst_voltage > voltage_max_approx){
+            voltage_max_approx = inst_voltage;
+        }
+    }        
+    
+    // Wait for zero crossing
+    bool zero_crossed = false;
+    while(zero_crossed == false){
+        inst_voltage = get_voltage_adc_blocking();
+        if (inst_voltage < (voltage_max_approx * 0.05)){
+            zero_crossed = true;
+        }
+    }
+    
+    // Find half period
+    while(halfperiod_count < 100){
+        while (halfperiod_state == 0){
+            inst_voltage = get_voltage_adc_blocking();
+            if (voltage_adc_value < (voltage_max_approx * 0.05)){
+                zero_crossed = true;
+            }
+        }
+    }
+        
+    // Find peak and avg values
+    // @4us/sample will sample a min of 10 periods
+    while(voltage_sample_count < 800000){ 
         if (start_adc(VOLTAGE_ADC_CHANNEL)){
             while(voltage_adc_updated == false){}
             voltage_sum += voltage_adc_value;
             if (voltage_adc_value > voltage_max){
                 voltage_max = voltage_adc_value;
             }
+            voltage_sample_count += 1;
+            voltage_adc_updated = false;
         }
-        for (int i=0; i<1000; i++){}
-        
-    
+        mains_average = voltage_sum / voltage; 
         
     }
+}
+
+double get_voltage_adc_blocking(void){
+    bool success = false;
+    while (success == false){
+        success = start_adc(VOLTAGE_ADC_CHANNEL);
+    }
+    while(voltage_adc_updated == false){}
+    voltage_adc_updated = false;
+    return voltage_adc_value;
 }
 
 bool start_adc(int channel){
