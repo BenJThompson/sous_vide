@@ -34,7 +34,7 @@ volatile double temp_adc_value;
 
 void main(void) {
     double mains_max_v;
-    double mains_period;
+    double mains_halfperiod;
     
     config_osc();
     config_adc();
@@ -44,8 +44,13 @@ void main(void) {
     config_int();
     init_io();
 
-    get_mains_info(&mains_max_v, &mains_period);
-    
+    get_mains_info(&mains_max_v, &mains_halfperiod);
+    while(true){
+        update_phase_state(); // Phase monitoring, triac control, 
+        if (tick){
+            update_tick(); // Display control, button monitoring,  
+        }
+    }
 }
 
 void interrupt low_priority low_isr(void) {
@@ -249,14 +254,13 @@ void config_adc(void){
     ADCON2 = 0b10001000;
 }
 
-void get_mains_info(double *mains_max_v, double *mains_period){
+void get_mains_info(double *mains_max_v, double *mains_halfperiod){
     double voltage_sum = 0.0;
-    double voltage_max = 0.0;
     double voltage_max_approx = 0.0;
     double inst_voltage;
     unsigned long voltage_sample_count = 0;
     unsigned int halfperiod_count = 0;
-    unsigned int halfperiod_state = 0;
+    double halfperiod_sum = 0.0;
     
     // Find approx peak value (approx due to noise)
     // @4us/sample will sample a min of 5 periods, actual will be more
@@ -267,40 +271,41 @@ void get_mains_info(double *mains_max_v, double *mains_period){
         }
     }        
     
-    // Wait for zero crossing
-    bool zero_crossed = false;
-    while(zero_crossed == false){
+    // Find half period and average voltage
+    // Sync to mains
+    inst_voltage = get_voltage_adc_blocking();
+    while(inst_voltage < (voltage_max_approx * 0.8)){
         inst_voltage = get_voltage_adc_blocking();
-        if (inst_voltage < (voltage_max_approx * 0.05)){
-            zero_crossed = true;
-        }
     }
-    
-    // Find half period
+    while(inst_voltage > (voltage_max_approx * 0.2)){
+        inst_voltage = get_voltage_adc_blocking();
+    }
+    read_and_restart_timer();
+    // Average many instantaneous voltages and half periods for accuracy  
     while(halfperiod_count < 100){
-        while (halfperiod_state == 0){
-            inst_voltage = get_voltage_adc_blocking();
-            if (voltage_adc_value < (voltage_max_approx * 0.05)){
-                zero_crossed = true;
-            }
+        while(inst_voltage < (voltage_max_approx * 0.8)){
+        inst_voltage = get_voltage_adc_blocking();
+        voltage_sum += inst_voltage;
+        voltage_sample_count++;
         }
+        while(inst_voltage > (voltage_max_approx * 0.2)){
+        inst_voltage = get_voltage_adc_blocking();
+        voltage_sum += inst_voltage;
+        voltage_sample_count++;
+        }
+        halfperiod_sum = read_and_restart_timer();
+        halfperiod_count++;
     }
-        
-    // Find peak and avg values
-    // @4us/sample will sample a min of 10 periods
-    while(voltage_sample_count < 800000){ 
-        if (start_adc(VOLTAGE_ADC_CHANNEL)){
-            while(voltage_adc_updated == false){}
-            voltage_sum += voltage_adc_value;
-            if (voltage_adc_value > voltage_max){
-                voltage_max = voltage_adc_value;
-            }
-            voltage_sample_count += 1;
-            voltage_adc_updated = false;
-        }
-        mains_average = voltage_sum / voltage; 
-         
-   }
+    mains_max_v = voltage_sum / voltage_sample_count;
+    mains_halfperiod = halfperiod_sum / halfperiod_count;
+}
+
+double read_and_restart_timer(){
+    int timer_value = TMR3L;
+    timer_value = (TMR3H << 8) + timer_value;
+    TMR3H = 0;
+    TMR3L = 0;
+    return (double)(((double)(timer_value))*(0.000004));
 }
 
 double get_voltage_adc_blocking(void){
