@@ -1,6 +1,6 @@
 /*
  * File:   main.c
- * Author: thompson
+ * Author: Thompson
  *
  * Created on February 13, 2017, 4:46 PM
  */
@@ -35,6 +35,7 @@ volatile double temp_adc_value;
 void main(void) {
     double mains_max_v;
     double mains_halfperiod;
+    unsigned int up_btn_counter;
     
     config_osc();
     config_adc();
@@ -46,11 +47,16 @@ void main(void) {
 
     get_mains_info(&mains_max_v, &mains_halfperiod);
     while(true){
-        update_phase_state(); // Phase monitoring, triac control, 
+        update_phase_state(); // Phase monitoring, triac control 
         if (tick){
-            update_tick(); // Display control, button monitoring,  
+            update_tick(); // Display control, button monitoring
         }
     }
+}
+
+void update_tick(){
+    unsigned int tock = tick;
+    tick = 0;
 }
 
 void interrupt low_priority low_isr(void) {

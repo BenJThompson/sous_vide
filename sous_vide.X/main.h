@@ -91,6 +91,7 @@
 // Enums
 
 typedef enum {IDLE, OFF, TURN_ON, ON} phase_state_type;
+typedef enum {START, IDLE, EDIT_TEMP, EDIT_HOUR, EDIT_MINUTE, RUN} mode_state_type;
 
 
 // PORT A
