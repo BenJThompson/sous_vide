@@ -37,6 +37,10 @@ void main(void) {
     double mains_halfperiod;
     unsigned int up_btn_counter;
     
+    mode_state_type mode_state = START;
+    button_state_type button_state = START;
+    phase_state_type phase_state = START;
+    
     config_osc();
     config_adc();
     config_io();
@@ -49,14 +53,33 @@ void main(void) {
     while(true){
         update_phase_state(); // Phase monitoring, triac control 
         if (tick){
-            update_tick(); // Display control, button monitoring
+            update_tick(&mode_state); // Display control, button monitoring
         }
     }
 }
 
-void update_tick(){
+void update_tick(mode_state_type* mode_state){
     unsigned int tock = tick;
     tick = 0;
+    
+    update_mode_state(tock, &mode_state);
+}
+
+void update_mode_state(unsigned int tock, mode_state_type* mode_state){
+    switch(mode_state){
+        case START:
+            ;
+        case IDLE:
+            ;
+        case EDIT_TEMP:
+            ;
+        case EDIT_HOUR:
+            ;
+        case EDIT_MINUTE:
+            ;
+        case RUN:
+            ;
+    }
 }
 
 void interrupt low_priority low_isr(void) {
