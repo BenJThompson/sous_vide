@@ -27,7 +27,7 @@
 #include "main.h"
 
 volatile unsigned int tick = 0;
-volatile phase_state_type phase_state = IDLE;
+volatile phase_state_type phase_state = PHASE_START;
 volatile double voltage_adc_value;
 volatile bool voltage_adc_updated;
 volatile double temp_adc_value;
@@ -37,9 +37,8 @@ void main(void) {
     double mains_halfperiod;
     unsigned int up_btn_counter;
     
-    mode_state_type mode_state = START;
-    button_state_type button_state = START;
-    phase_state_type phase_state = START;
+    mode_state_type mode_state = MODE_START;
+    button_state_type button_state = BUTTON_START;
     
     config_osc();
     config_adc();
@@ -55,30 +54,6 @@ void main(void) {
         if (tick){
             update_tick(&mode_state); // Display control, button monitoring
         }
-    }
-}
-
-void update_tick(mode_state_type* mode_state){
-    unsigned int tock = tick;
-    tick = 0;
-    
-    update_mode_state(tock, &mode_state);
-}
-
-void update_mode_state(unsigned int tock, mode_state_type* mode_state){
-    switch(mode_state){
-        case START:
-            ;
-        case IDLE:
-            ;
-        case EDIT_TEMP:
-            ;
-        case EDIT_HOUR:
-            ;
-        case EDIT_MINUTE:
-            ;
-        case RUN:
-            ;
     }
 }
 
@@ -104,17 +79,25 @@ void interrupt high_priority isr(void) {
     }
 }
 
-void update_phase_state(void){
-    // TODO
-}
-
-void update_adc_value(void){
-    if (ADCON0bits.CHS0 == VOLTAGE_ADC_CHANNEL){
-        voltage_adc_value = (double)(ADRESH << 8 + ADRESL) / 0x400;
-        voltage_adc_updated = true;
-    } else {
-        // TODO temp_adc_value = ?
-    }
+void config_adc(void){
+    
+    // ADCON0<7:6> Unimplemented
+    // ADCON0<5:2> 0000 = Channel 0 (AN0)
+    // ADCON0<1> When ADON = 1, 0 = A/D Idle
+    // ADCON0<0> 1 = A/D converter module is enabled
+    ADCON0 = 0b00000001;
+    
+    // ADCON0<7:6> Unimplemented
+    // ADCON0<5> 1 = V REF - (AN2)
+    // ADCON0<4> 1 = V REF + (AN3)
+    // ADCON0<3:0> 1101 = AN0 through AN3 analog; the remainder digital
+    ADCON1 = 0b00111101;
+    
+    // ADCON0<7> 1 = Right justified
+    // ADCON0<6> Unimplemented
+    // ADCON0<5:3> 001 = 2 T_AD --> 2 * 2us = 4us (min = 1.1us)
+    // ADCON0<2:0> 000 = F OSC/2 --> T_AD = (1/(1 Mhz/2)) = 2us
+    ADCON2 = 0b10001000;
 }
 
 void config_int() {
@@ -134,61 +117,6 @@ void config_int() {
             
     INTCONbits.GIEH = 1; // 1 = Enables all high-priority interrupts
     INTCONbits.GIEL = 1; // 1 = Enables all low-priority peripheral interrupts (if GIE/GIEH = 1)
-}
-
-void config_timer() {
-    /* Tick timer */
-    // f = ((1Mhz / 4) / 250) = 1 kHz
-    TMR0L = 0xFF - 250 - 2;
-    INTCONbits.TMR0IF = 0; // 0 = TMR0 register did not overflow
-    // T0CON<7> 1 = starts Timer0
-    // T0CON<6> 1 = Timer0 is configured as a 8-bit timer/counter
-    // T0CON<5> 0 = Internal instruction cycle clock (CLKO)
-    // T0CON<4> N/A
-    // T0CON<3> 1 = Timer0 prescaler is not assigned.
-    // T0CON<2:0>  N/A
-    T0CON = 0b11001000;
-    
-    /* Process timer */
-    // (1e-6s*4) * 65535 = 0.26s; typical mains period = 0.02s to 0.016s
-    // T1CON<7> 1 = Enables register read/write of Timer1 in one 16-bit operation
-    // T1CON<6> 0 = Device clock is derived from another source
-    // T1CON<5:4> 00 = 1:1 Prescale value
-    // T1CON<3> 0 = Timer1 oscillator is shut off
-    // T1CON<2> This bit is ignored.
-    // T1CON<1> 0 = Internal clock (F OSC /4)
-    // T1CON<0> 0 = disables Timer1
-    T1CON = 0b10000000;
-    
-    /* Mains Period Timer */
-    // T3CON<7> 1 = Enables register read/write of Timer3 in one 16-bit operation
-    // T3CON<6> 1 = Timer3 is the capture/compare clock source for both CCP modules
-    // T3CON<5:4> 00 = 1:1 Prescale value
-    // T3CON<3> This bit is ignored.
-    // T3CON<2> This bit is ignored.
-    // T3CON<1> 0 = Internal clock (F OSC /4)
-    // T3CON<0> 0 = Stops Timer3
-    T3CON = 0b11000000;
-}
-
-void config_osc(void) {
-    // Should be called before all other config functions
-
-    // Most of osc configuration occurs in PRAGMAS in header file
-
-    // Config for INTIO
-    /* Internal Oscillator used as Microcontroller Clock Source, EC
-    Oscillator used as USB Clock Source, Digital I/O on RA6*/
-
-    // OSCCON<7> (IDLEN) 1 = Device enters Idle mode on SLEEP instruction
-    // OSCCON<6:4> (IRCF2:IRCF0) 100 = 1 MHz
-    // OSCCON<3:2> Read only 
-    // OSCCON<1:0> (SCS1:SCS0) 1x = Internal oscillator
-    OSCCON = 0b11000011;
-
-    // 31 kHz device clock derived directly from INTRC internal oscillator
-    // Center frequency. Oscillator module is running at the calibrated frequency.
-    OSCTUNE = 0b00000000;
 }
 
 void config_io(void) {
@@ -235,52 +163,71 @@ void config_io(void) {
     BTN_STOP_TRIS = TRIS_INPUT;
 }
 
-void init_io(void) {
-    
-    // PORT A
+void config_osc(void) {
+    // Should be called before all other config functions
 
-    // PORT B
-    MOTOR = 0;
-    TRIAC = 0;
-    
-    // PORT C
-    LED_1 = 0;
-    LED_2 = 0;
-    LED_3 = 0;
-    LED_E = 0;
-    LED_F = 0;
+    // Most of osc configuration occurs in PRAGMAS in header file
 
-    // PORT D
-    LED_4 = 0;
-    LED_D = 0;
-    LED_G = 0;
-    LED_B = 0;
-    LED_A = 0;
-    LED_C = 0;
-    LED_DP = 0;
+    // Config for INTIO
+    /* Internal Oscillator used as Microcontroller Clock Source, EC
+    Oscillator used as USB Clock Source, Digital I/O on RA6*/
 
-    // PORT E
+    // OSCCON<7> (IDLEN) 1 = Device enters Idle mode on SLEEP instruction
+    // OSCCON<6:4> (IRCF2:IRCF0) 100 = 1 MHz
+    // OSCCON<3:2> Read only 
+    // OSCCON<1:0> (SCS1:SCS0) 1x = Internal oscillator
+    OSCCON = 0b11000011;
+
+    // 31 kHz device clock derived directly from INTRC internal oscillator
+    // Center frequency. Oscillator module is running at the calibrated frequency.
+    OSCTUNE = 0b00000000;
 }
 
-void config_adc(void){
+void config_timer() {
+    /* Tick timer */
+    // f = ((1Mhz / 4) / 250) = 1 kHz
+    TMR0L = 0xFF - 250 - 2;
+    INTCONbits.TMR0IF = 0; // 0 = TMR0 register did not overflow
+    // T0CON<7> 1 = starts Timer0
+    // T0CON<6> 1 = Timer0 is configured as a 8-bit timer/counter
+    // T0CON<5> 0 = Internal instruction cycle clock (CLKO)
+    // T0CON<4> N/A
+    // T0CON<3> 1 = Timer0 prescaler is not assigned.
+    // T0CON<2:0>  N/A
+    T0CON = 0b11001000;
     
-    // ADCON0<7:6> Unimplemented
-    // ADCON0<5:2> 0000 = Channel 0 (AN0)
-    // ADCON0<1> When ADON = 1, 0 = A/D Idle
-    // ADCON0<0> 1 = A/D converter module is enabled
-    ADCON0 = 0b00000001;
+    /* Process timer */
+    // (1e-6s*4) * 65535 = 0.26s; typical mains period = 0.02s to 0.016s
+    // T1CON<7> 1 = Enables register read/write of Timer1 in one 16-bit operation
+    // T1CON<6> 0 = Device clock is derived from another source
+    // T1CON<5:4> 00 = 1:1 Prescale value
+    // T1CON<3> 0 = Timer1 oscillator is shut off
+    // T1CON<2> This bit is ignored.
+    // T1CON<1> 0 = Internal clock (F OSC /4)
+    // T1CON<0> 0 = disables Timer1
+    T1CON = 0b10000000;
     
-    // ADCON0<7:6> Unimplemented
-    // ADCON0<5> 1 = V REF - (AN2)
-    // ADCON0<4> 1 = V REF + (AN3)
-    // ADCON0<3:0> 1101 = AN0 through AN3 analog; the remainder digital
-    ADCON1 = 0b00111101;
-    
-    // ADCON0<7> 1 = Right justified
-    // ADCON0<6> Unimplemented
-    // ADCON0<5:3> 001 = 2 T_AD --> 2 * 2us = 4us (min = 1.1us)
-    // ADCON0<2:0> 000 = F OSC/2 --> T_AD = (1/(1 Mhz/2)) = 2us
-    ADCON2 = 0b10001000;
+    /* Mains Period Timer */
+    // T3CON<7> 1 = Enables register read/write of Timer3 in one 16-bit operation
+    // T3CON<6> 1 = Timer3 is the capture/compare clock source for both CCP modules
+    // T3CON<5:4> 00 = 1:1 Prescale value
+    // T3CON<3> This bit is ignored.
+    // T3CON<2> This bit is ignored.
+    // T3CON<1> 0 = Internal clock (F OSC /4)
+    // T3CON<0> 0 = Stops Timer3
+    T3CON = 0b11000000;
+}
+
+void config_uart(void){
+    //TODO
+}
+
+double get_and_restart_timer(void){
+    int timer_value = TMR3L;
+    timer_value = (TMR3H << 8) + timer_value;
+    TMR3H = 0;
+    TMR3L = 0;
+    return (double)(((double)(timer_value))*(0.000004));
 }
 
 void get_mains_info(double *mains_max_v, double *mains_halfperiod){
@@ -309,7 +256,7 @@ void get_mains_info(double *mains_max_v, double *mains_halfperiod){
     while(inst_voltage > (voltage_max_approx * 0.2)){
         inst_voltage = get_voltage_adc_blocking();
     }
-    read_and_restart_timer();
+    get_and_restart_timer();
     // Average many instantaneous voltages and half periods for accuracy  
     while(halfperiod_count < 100){
         while(inst_voltage < (voltage_max_approx * 0.8)){
@@ -322,19 +269,11 @@ void get_mains_info(double *mains_max_v, double *mains_halfperiod){
         voltage_sum += inst_voltage;
         voltage_sample_count++;
         }
-        halfperiod_sum = read_and_restart_timer();
+        halfperiod_sum = get_and_restart_timer();
         halfperiod_count++;
     }
-    mains_max_v = voltage_sum / voltage_sample_count;
-    mains_halfperiod = halfperiod_sum / halfperiod_count;
-}
-
-double read_and_restart_timer(){
-    int timer_value = TMR3L;
-    timer_value = (TMR3H << 8) + timer_value;
-    TMR3H = 0;
-    TMR3L = 0;
-    return (double)(((double)(timer_value))*(0.000004));
+    *mains_max_v = voltage_sum / voltage_sample_count;
+    *mains_halfperiod = halfperiod_sum / halfperiod_count;
 }
 
 double get_voltage_adc_blocking(void){
@@ -347,6 +286,33 @@ double get_voltage_adc_blocking(void){
     return voltage_adc_value;
 }
 
+void init_io(void) {
+    
+    // PORT A
+
+    // PORT B
+    MOTOR = 0;
+    TRIAC = 0;
+    
+    // PORT C
+    LED_1 = 0;
+    LED_2 = 0;
+    LED_3 = 0;
+    LED_E = 0;
+    LED_F = 0;
+
+    // PORT D
+    LED_4 = 0;
+    LED_D = 0;
+    LED_G = 0;
+    LED_B = 0;
+    LED_A = 0;
+    LED_C = 0;
+    LED_DP = 0;
+
+    // PORT E
+}
+
 bool start_adc(int channel){
     bool success = false;
     if (0 == ADCON0bits.GO_DONE){
@@ -356,3 +322,76 @@ bool start_adc(int channel){
     }
     return success;
 }
+
+void update_adc_value(void){
+    if (ADCON0bits.CHS0 == VOLTAGE_ADC_CHANNEL){
+        voltage_adc_value = (double)(ADRESH << 8 + ADRESL) / 0x400;
+        voltage_adc_updated = true;
+    } else {
+        // TODO temp_adc_value = ?
+    }
+}
+
+void update_button_state(unsigned int tock, button_state_type* button_state, 
+        button_type* button_pressed, button_type* button_signal,
+        unsigned int* button_timer){
+    switch(*button_state){
+        case BUTTON_START:
+            *button_state = BUTTON_IDLE;
+            break;
+        case BUTTON_IDLE:
+            if (BTN_STOP == PRESSED){
+                *button_pressed = STOP_BUTTON;
+            }
+            else if (BTN_GO == PRESSED){
+                *button_pressed = GO_BUTTON;
+            }
+            else if (BTN_UP == PRESSED){
+                *button_pressed = UP_BUTTON;
+            }
+            else if (BTN_DOWN == PRESSED){
+                *button_pressed = DOWN_BUTTON;
+            }
+            if (*button_pressed != NO_BUTTON){
+                *button_state = BUTTON_PRESSED;
+                *button_timer = 0;
+            }
+            break;
+        case BUTTON_PRESSED:
+            break;
+        case BUTTON_HELD:
+            break;
+        case BUTTON_RELEASED:
+            break;
+    }
+}
+
+void update_phase_state(void){
+    // TODO
+}
+
+void update_mode_state(unsigned int tock, mode_state_type* mode_state){
+    switch(*mode_state){
+        case MODE_START:
+            *mode_state = MODE_IDLE;
+            break;
+        case MODE_IDLE:
+            break;
+        case MODE_EDIT_TEMP:
+            break;
+        case MODE_EDIT_HOUR:
+            break;
+        case MODE_EDIT_MINUTE:
+            break;
+        case MODE_RUN:
+            break;
+    }
+}
+
+void update_tick(mode_state_type* mode_state){
+    unsigned int tock = tick;
+    tick = 0;
+    
+    update_mode_state(tock, mode_state);
+}
+

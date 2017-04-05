@@ -5,8 +5,8 @@
  * Created on February 14, 2017, 10:52 AM
  */
 
-#ifndef MAIN_H
-#define	MAIN_H
+//#ifndef MAIN_H
+//#define	MAIN_H
 
 // PIC18F4550 Configuration Bit Settings
 
@@ -82,17 +82,21 @@
 
 // Constants
 
-#define    TRIS_OUTPUT 0
-#define    TRIS_INPUT 1
+#define     TRIS_OUTPUT 0
+#define     TRIS_INPUT 1
 
-#define     VOLTAGE_ADC_CHANNEL = 0
-#define     TEMP_ADC_CHANNEL = 1
+#define     VOLTAGE_ADC_CHANNEL 0
+#define     TEMP_ADC_CHANNEL 1
 
-// Enums
+#define     PRESSED 0
+#define     RELEASED 1
 
-typedef enum {START, IDLE, OFF, TURN_ON, ON} phase_state_type;
-typedef enum {START, IDLE, EDIT_TEMP, EDIT_HOUR, EDIT_MINUTE, RUN} mode_state_type;
-typedef enum {START, IDLE, PRESSED, HELD, RELEASED} button_state_type;
+// Typedefs
+
+typedef enum {PHASE_START, PHASE_IDLE, PHASE_OFF, PHASE_TURN_ON, PHASE_ON} phase_state_type;
+typedef enum {MODE_START, MODE_IDLE, MODE_EDIT_TEMP, MODE_EDIT_HOUR, MODE_EDIT_MINUTE, MODE_RUN} mode_state_type;
+typedef enum {BUTTON_START, BUTTON_IDLE, BUTTON_PRESSED, BUTTON_HELD, BUTTON_RELEASED} button_state_type;
+typedef enum {NO_BUTTON, GO_BUTTON, STOP_BUTTON, UP_BUTTON, DOWN_BUTTON} button_type;
 
 
 // PORT A
@@ -234,10 +238,23 @@ typedef enum {START, IDLE, PRESSED, HELD, RELEASED} button_state_type;
 
 // Function prototypes
 
-void config_osc(void);
-void config_io(void);
-void config_uart(void);
 void config_adc(void);
-void config_timer(void);
 void config_int(void);
+void config_io(void);
+void config_osc(void);
+void config_timer(void);
+void config_uart(void);
+
+double get_and_restart_timer(void);
+void get_mains_info(double *mains_max_v, double *mains_halfperiod);
+double get_voltage_adc_blocking(void);
+
 void init_io(void);
+
+bool start_adc(int channel);
+
+void update_adc_value(void);
+void update_mode_state(unsigned int tock, mode_state_type* mode_state);
+void update_phase_state(void);
+void update_tick(mode_state_type* mode_state);
+
