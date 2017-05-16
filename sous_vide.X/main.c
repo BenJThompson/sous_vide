@@ -27,7 +27,7 @@
 #include "main.h"
 
 volatile unsigned int tick = 0;
-volatile phase_state_type phase_state = PHASE_START;
+volatile phase_state_type phase_state = PHASE_IDLE;
 volatile double voltage_adc_value;
 volatile bool voltage_adc_updated;
 volatile double temp_adc_value;
@@ -313,6 +313,10 @@ void init_io(void) {
     // PORT E
 }
 
+double restart_mains_timer(){
+// LEFT OFF HERE
+}
+
 bool start_adc(int channel){
     bool success = false;
     if (0 == ADCON0bits.GO_DONE){
@@ -321,6 +325,12 @@ bool start_adc(int channel){
         success = true;
     }
     return success;
+}
+
+void start_process_timer(int timer_len){
+    TMR1H = timer_len >> 8;
+    TMR1L = timer_len & 0xFF;
+    T1CONbits.TMR1ON = 1;    
 }
 
 void update_adc_value(void){
@@ -366,8 +376,26 @@ void update_button_state(unsigned int tock, button_state_type* button_state,
     }
 }
 
-void update_phase_state(void){
-    // TODO
+void update_phase_state(int* triac_timer_value){
+    switch(phase_state){
+        case PHASE_IDLE:
+            break;
+        case PHASE_START:
+            start_adc(TEMP_ADC_CHANNEL);
+            start_process_timer(triac_timer_value);
+            last_half_period = restart_mains_timer;
+            break;
+        case PHASE_GET_TEMP:
+            break;
+        case PHASE_TURN_ON_TRIAC:
+            break;
+        case PHASE_REMOVE_TRIAC_SIG:
+            break;
+        case PHASE_WAIT_FOR_PHASE_END:
+            break;
+        case PHASE_WAIT_FOR_PHASE_START:
+            break;
+    }
 }
 
 void update_mode_state(unsigned int tock, mode_state_type* mode_state){
