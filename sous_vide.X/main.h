@@ -91,9 +91,12 @@
 #define     PRESSED 0
 #define     RELEASED 1
 
+#define     TIMER_FREQ (double)250000
+
 // Typedefs
 
-typedef enum {PHASE_START, PHASE_IDLE, PHASE_OFF, PHASE_TURN_ON, PHASE_ON} phase_state_type;
+typedef enum {PHASE_IDLE, PHASE_START, PHASE_GET_TEMP, PHASE_TURN_ON_TRIAC, PHASE_REMOVE_TRIAC_SIG,
+PHASE_WAIT_FOR_PHASE_END, PHASE_WAIT_FOR_PHASE_START} phase_state_type;
 typedef enum {MODE_START, MODE_IDLE, MODE_EDIT_TEMP, MODE_EDIT_HOUR, MODE_EDIT_MINUTE, MODE_RUN} mode_state_type;
 typedef enum {BUTTON_START, BUTTON_IDLE, BUTTON_PRESSED, BUTTON_HELD, BUTTON_RELEASED} button_state_type;
 typedef enum {NO_BUTTON, GO_BUTTON, STOP_BUTTON, UP_BUTTON, DOWN_BUTTON} button_type;
@@ -255,6 +258,6 @@ bool start_adc(int channel);
 
 void update_adc_value(void);
 void update_mode_state(unsigned int tock, mode_state_type* mode_state);
-void update_phase_state(void);
+void update_phase_state(unsigned int* triac_timer_value);
 void update_tick(mode_state_type* mode_state);
 

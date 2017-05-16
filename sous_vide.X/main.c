@@ -36,9 +36,11 @@ void main(void) {
     double mains_max_v;
     double mains_halfperiod;
     unsigned int up_btn_counter;
+    unsigned int triac_timer_value;
     
     mode_state_type mode_state = MODE_START;
     button_state_type button_state = BUTTON_START;
+    
     
     config_osc();
     config_adc();
@@ -50,7 +52,7 @@ void main(void) {
 
     get_mains_info(&mains_max_v, &mains_halfperiod);
     while(true){
-        update_phase_state(); // Phase monitoring, triac control 
+        update_phase_state(&triac_timer_value); // Phase monitoring, triac control 
         if (tick){
             update_tick(&mode_state); // Display control, button monitoring
         }
@@ -314,7 +316,12 @@ void init_io(void) {
 }
 
 double restart_mains_timer(){
-// LEFT OFF HERE
+    T3CONbits.TMR3ON = 0;
+    int timer_int_val = (TMR3H << 8) + TMR3L;
+    TMR3H = 0;
+    TMR3L = 0;
+    T3CONbits.TMR3ON = 1;
+    return (double)timer_int_val / TIMER_FREQ;
 }
 
 bool start_adc(int channel){
@@ -376,14 +383,29 @@ void update_button_state(unsigned int tock, button_state_type* button_state,
     }
 }
 
-void update_phase_state(int* triac_timer_value){
+void update_phase_state(unsigned int* triac_timer_value){
+    
+    
+    /*
+     * ok, ok I think that this should really be more interrupt driven
+     * The starting of the triac timer can be a consequence of the phase state
+     * and a valid ADC value
+     * The starting of the triac can be a consequence of the overflow interrupt 
+     * of the process timer
+     * 
+     * /
     switch(phase_state){
         case PHASE_IDLE:
             break;
         case PHASE_START:
-            start_adc(TEMP_ADC_CHANNEL);
+            
+            // Stay here until mains is above 20%
+            start_adc(VOLTAGE_ADC_CHANNEL);
+            
             start_process_timer(triac_timer_value);
-            last_half_period = restart_mains_timer;
+            start_adc(TEMP_ADC_CHANNEL);            
+            double last_half_period = restart_mains_timer;
+            
             break;
         case PHASE_GET_TEMP:
             break;
@@ -391,9 +413,8 @@ void update_phase_state(int* triac_timer_value){
             break;
         case PHASE_REMOVE_TRIAC_SIG:
             break;
-        case PHASE_WAIT_FOR_PHASE_END:
-            break;
-        case PHASE_WAIT_FOR_PHASE_START:
+        case PHASE_PHASE_END:
+            // Stay here until mains is below 10%
             break;
     }
 }
