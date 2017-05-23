@@ -93,6 +93,10 @@
 
 #define     TIMER_FREQ (double)250000
 
+#define     LOW_V_COEFF (double)0.1
+#define     HIGH_V_COEFF (double)0.7071 // 0.7071 corresponds to 25% of the halfwave
+
+
 // Typedefs
 
 typedef enum {PHASE_IDLE, PHASE_START, PHASE_GET_TEMP, PHASE_TURN_ON_TRIAC, PHASE_REMOVE_TRIAC_SIG,

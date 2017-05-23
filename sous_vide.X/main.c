@@ -8,6 +8,7 @@
 /*
  * TODO
  * 
+ * - Unit test with phase tracking PID 
  * - WDT
  * - Phase State Machine
  * - UI State Machine
@@ -383,24 +384,21 @@ void update_button_state(unsigned int tock, button_state_type* button_state,
     }
 }
 
-void update_phase_state(unsigned int* triac_timer_value){
+void update_phase_state(){
     
+    // Only should be entered through interrupt
     
-    /*
-     * ok, ok I think that this should really be more interrupt driven
-     * The starting of the triac timer can be a consequence of the phase state
-     * and a valid ADC value
-     * The starting of the triac can be a consequence of the overflow interrupt 
-     * of the process timer
-     * 
-     * /
     switch(phase_state){
+        case PHASE_TEST_LOW_V:
+            if voltage_adc_value < HIGH_V_COEFF * 
+            break;
         case PHASE_IDLE:
             break;
-        case PHASE_START:
-            
+        case PHASE_WAIT_HIGH:
             // Stay here until mains is above 20%
-            start_adc(VOLTAGE_ADC_CHANNEL);
+            start_adc(VOLTAGE_ADC_CHANNEL); 
+            break;
+        case PHASE_START:
             
             start_process_timer(triac_timer_value);
             start_adc(TEMP_ADC_CHANNEL);            
@@ -415,6 +413,7 @@ void update_phase_state(unsigned int* triac_timer_value){
             break;
         case PHASE_PHASE_END:
             // Stay here until mains is below 10%
+            // A counter could be inserted here to reduce the amounts of 
             break;
     }
 }
